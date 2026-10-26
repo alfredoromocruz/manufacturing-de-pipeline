@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+
+# Generated manufacturing data
+data/raw_landing/
+data/bronze/
+data/silver/
+data/gold/
+
+# Airflow
+logs/
+airflow.db
+
+# Local development
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
