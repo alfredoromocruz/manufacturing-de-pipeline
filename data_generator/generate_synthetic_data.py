@@ -2,6 +2,7 @@ from pathlib import Path
 import random
 import csv
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 # Reproducibility
 RNG = random.Random(42)
@@ -147,3 +148,120 @@ with sensor_file.open("w", newline = "", encoding = "utf-8") as file:
 
 print(f"Succesfully generated {record_count} sensor readings.")
 print(f"Sensor file saved at: {sensor_file}")
+
+# Calculate running time per machine and shift
+runtime_by_shift = defaultdict(int)
+
+with sensor_file.open("r", newline = "", encoding = "utf-8") as file:
+
+    reader = csv.DictReader(file)
+
+    for row in reader:
+
+        reading_time = datetime.fromisoformat(row["timestamp"])
+
+        shift_number = reading_time.hour // 8 + 1
+
+        key = (
+            row["machine_id"],
+            reading_time.date().isoformat(),
+            f"S{shift_number}"
+        )
+
+        if row["status"] == "running":
+            runtime_by_shift[key] += INTERVAL_MINUTES
+        else:
+            runtime_by_shift[key] += 0
+
+print(f"Machine-shift combinations: {len(runtime_by_shift)}")
+
+for (machine_id, date, shift_id), minutes in list(
+    runtime_by_shift.items()
+)[:6]:
+
+    print(
+        f"{machine_id} | {date} | "
+        f"{shift_id} | {minutes} running minutes"
+    )
+
+# Generate production orders
+PRODUCTION_DIR = RAW_DATA_DIR / "production_orders"
+PRODUCTION_DIR.mkdir(parents = True, exist_ok = True)
+
+production_file = PRODUCTION_DIR / "production_orders.csv"
+
+PRODUCTS = ["P001", "P002", "P003"]
+
+order_count = 0
+
+with production_file.open("w", newline = "", encoding = "utf-8") as file:
+
+    writer = csv.DictWriter(
+        file,
+        fieldnames = [
+            "order_id",
+            "product_id",
+            "machine_id",
+            "shift_id",
+            "quantity_produced",
+            "start_time",
+            "end_time",
+            "planned_production_minutes"
+        ]
+    )
+
+    writer.writeheader()
+
+    for day_offset in range(SIMULATION_DAYS):
+
+        production_date = START_TIME + timedelta (days = day_offset)
+
+        for shift_number in range(1, 4):
+
+            shift_id = f"S{shift_number}"
+
+            shift_start = production_date + timedelta(
+                hours = (shift_number - 1) * 8
+            )
+
+            shift_end = shift_start + timedelta(hours = 8)
+
+            for machine in machines:
+
+                machine_id = machine["machine_id"]
+
+                key = (
+                    machine_id,
+                    production_date.date().isoformat(),
+                    shift_id
+                )
+
+                running_minutes = runtime_by_shift[key]
+
+                ideal_cycle_time = machine["ideal_cycle_time_seconds"]
+
+                theoretical_quantity = (
+                    running_minutes * 60 / ideal_cycle_time
+                )
+
+                performance_factor = RNG.uniform(0.80, 0.98)
+
+                quantity_produced = int(
+                    theoretical_quantity * performance_factor
+                )
+
+                order_count += 1
+
+                writer.writerow({
+                    "order_id": f"ORD{order_count:05d}",
+                    "product_id": RNG.choice(PRODUCTS),
+                    "machine_id": machine_id,
+                    "shift_id": shift_id,
+                    "quantity_produced": quantity_produced,
+                    "start_time": shift_start.isoformat(),
+                    "end_time": shift_end.isoformat(),
+                    "planned_production_minutes": 480
+                })
+
+print(f"Successfully generated {order_count} production orders.")
+print(f"Production file saved at: {production_file}")
