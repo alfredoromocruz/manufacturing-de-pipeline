@@ -265,3 +265,100 @@ with production_file.open("w", newline = "", encoding = "utf-8") as file:
 
 print(f"Successfully generated {order_count} production orders.")
 print(f"Production file saved at: {production_file}")
+
+# Defect types by machine
+DEFECT_TYPES = {
+    "Stamping Press": [
+        "dimensional_error",
+        "crack"
+    ],
+    "Welding Robot": [
+        "weak_weld",
+        "weld_porosity"
+    ],
+    "Painting Station": [
+        "paint_defect",
+        "surface_scratch"
+    ],
+    "Assembly Station": [
+        "missing_component",
+        "assembly_misalignment"
+    ]
+}
+
+machine_type_by_id = {
+    machine["machine_id"]: machine["machine_type"]
+    for machine in machines
+}
+
+# Create quality inspection directory
+
+QUALITY_DIR = RAW_DATA_DIR / "quality_checks"
+QUALITY_DIR.mkdir(parents = True, exist_ok = True)
+
+quality_file = QUALITY_DIR / "quality_inspections.csv"
+
+inspection_count = 0
+
+with production_file.open("r", newline = "", encoding = "utf-8") as source:
+
+    orders_reader = csv.DictReader(source)
+
+    with quality_file.open("w", newline = "", encoding = "utf-8") as target:
+
+        writer = csv.DictWriter(
+            target,
+            fieldnames = [
+                "inspection_id",
+                "batch_id",
+                "order_id",
+                "inspector_id",
+                "defect_type",
+                "defect_count",
+                "inspection_time"
+            ]
+        )
+
+        writer.writeheader()
+
+        for order in orders_reader:
+
+            inspection_count += 1
+
+            quantity = int(order["quantity_produced"])
+
+            defect_rate = RNG.uniform(0.005, 0.04)
+
+            defect_count = sum(
+                RNG.random() < defect_rate
+                for _ in range(quantity)
+            )
+
+            machine_type = machine_type_by_id[
+                order["machine_id"]
+            ]
+
+            if defect_count == 0:
+                defect_type = "none"
+            else:
+                defect_type = RNG.choice(
+                    DEFECT_TYPES[machine_type]
+                )
+
+            inspection_time = (
+                datetime.fromisoformat(order["end_time"])
+                + timedelta(minutes = 10)
+            )
+
+            writer.writerow({
+                "inspection_id": f"INSP{inspection_count:05d}",
+                "batch_id": f"B{inspection_count:05d}",
+                "order_id": order["order_id"],
+                "inspector_id": f"INS{RNG.randint(1, 6):03d}",
+                "defect_type": defect_type,
+                "defect_count": defect_count,
+                "inspection_time": inspection_time.isoformat()
+            })
+
+print(f"Successfully generated {inspection_count} inspections.")
+print(f"Quality file saved at: {quality_file}")
